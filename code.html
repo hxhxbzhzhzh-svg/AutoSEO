@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SEO Audit Tool</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'sans-serif'],
+          mono: ['JetBrains Mono', 'monospace'],
+        },
+        colors: {
+          ink: '#0B1220',
+          panel: '#111A2E',
+          line: '#22314F',
+          cyan: '#2DD4BF',
+          amber: '#F5A524',
+          coral: '#F2545B',
+        }
+      }
+    }
+  }
+</script>
+<style>
+  body { background: #F4F6FB; }
+  .scanner-grid {
+    background-image:
+      linear-gradient(rgba(11,18,32,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(11,18,32,0.04) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #22314F; border-radius: 4px; }
+  .spin-slow { animation: spin 2.4s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .fade-in { animation: fadeIn .35s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] .chevron { transform: rotate(90deg); }
+</style>
+</head>
+<body class="min-h-screen font-sans text-ink">
+
+  <!-- ======================= HEADER ======================= -->
+  <header class="border-b border-black/5 bg-ink text-white">
+    <div class="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-md bg-cyan/90 flex items-center justify-center text-ink font-bold font-mono text-sm">SA</div>
+        <div>
+          <p class="font-semibold leading-tight">SEO Audit Tool</p>
+          <p class="text-xs text-white/50 font-mono leading-tight">локальный технический аудит сайта</p>
+        </div>
+      </div>
+      <div id="rescan-wrap" class="hidden">
+        <button id="rescan-btn" class="text-sm px-4 py-2 rounded-md border border-white/15 text-white/80 hover:bg-white/5 hover:text-white transition">
+          Новый аудит
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ======================= HERO / FORM SCREEN ======================= -->
+  <section id="form-screen" class="scanner-grid">
+    <div class="max-w-6xl mx-auto px-6 pt-20 pb-24">
+      <div class="max-w-2xl mx-auto text-center">
+        <p class="font-mono text-xs tracking-wide text-cyan/80 mb-3">status_code · title · meta · h1–h6 · alt · canonical · robots</p>
+        <h1 class="text-4xl font-extrabold tracking-tight text-ink mb-4">
+          Найдите, что мешает вашему сайту ранжироваться
+        </h1>
+        <p class="text-slate-500 mb-10">
+          Введите адрес сайта — сканер обойдёт страницы внутри домена и покажет
+          битые ссылки, дубли Title и другие технические проблемы SEO.
+        </p>
+
+        <form id="audit-form" class="bg-white border border-slate-200 rounded-xl shadow-sm p-3 flex flex-col sm:flex-row gap-3 text-left">
+          <input
+            id="url-input"
+            type="text"
+            required
+            placeholder="https://example.com"
+            class="flex-1 px-4 py-3 rounded-lg bg-slate-50 border border-slate-200 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-cyan/60 focus:border-cyan"
+          />
+          <button
+            type="submit"
+            id="submit-btn"
+            class="px-6 py-3 rounded-lg bg-ink text-white font-semibold text-sm hover:bg-ink/90 transition whitespace-nowrap"
+          >
+            Запустить SEO-аудит
+          </button>
+        </form>
+
+        <div class="flex items-center justify-center gap-6 mt-4 text-xs text-slate-400 font-mono">
+          <label class="flex items-center gap-2">
+            глубина
+            <input id="max-depth" type="number" value="3" min="1" max="6" class="w-14 px-2 py-1 rounded border border-slate-200 text-center" />
+          </label>
+          <label class="flex items-center gap-2">
+            макс. страниц
+            <input id="max-pages" type="number" value="50" min="1" max="200" class="w-16 px-2 py-1 rounded border border-slate-200 text-center" />
+          </label>
+        </div>
+
+        <p id="form-error" class="hidden mt-4 text-sm text-coral font-medium"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= LOADER SCREEN ======================= -->
+  <section id="loader-screen" class="hidden max-w-6xl mx-auto px-6 py-32 text-center">
+    <div class="w-14 h-14 mx-auto mb-6 rounded-full border-2 border-slate-200 border-t-cyan spin-slow"></div>
+    <p id="loader-text" class="font-mono text-sm text-slate-500">Сканируем страницы…</p>
+    <p class="text-xs text-slate-400 mt-2">Это может занять от нескольких секунд до пары минут — зависит от размера сайта.</p>
+  </section>
+
+  <!-- ======================= DASHBOARD SCREEN ======================= -->
+  <section id="dashboard-screen" class="hidden max-w-6xl mx-auto px-6 py-10">
+
+    <!-- Summary cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div class="bg-white border border-slate-200 rounded-xl p-5">
+        <p class="text-xs text-slate-400 font-mono mb-1">SEO Score</p>
+        <p id="score-value" class="text-3xl font-extrabold">—</p>
+        <p id="score-target" class="text-xs text-slate-400 font-mono mt-1 truncate"></p>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl p-5">
+        <p class="text-xs text-slate-400 font-mono mb-1">Проверено страниц</p>
+        <p id="pages-value" class="text-3xl font-extrabold">0</p>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl p-5">
+        <p class="text-xs text-slate-400 font-mono mb-1">Ошибки</p>
+        <p id="errors-value" class="text-3xl font-extrabold text-coral">0</p>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl p-5">
+        <p class="text-xs text-slate-400 font-mono mb-1">Битые ссылки</p>
+        <p id="broken-value" class="text-3xl font-extrabold text-amber">0</p>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-bold text-lg">Проблемы по категориям</h2>
+      <div class="flex gap-2">
+        <button id="export-json" class="text-xs font-mono px-3 py-2 rounded-md border border-slate-200 hover:bg-slate-50">Скачать JSON</button>
+        <button id="export-csv" class="text-xs font-mono px-3 py-2 rounded-md border border-slate-200 hover:bg-slate-50">Скачать CSV</button>
+      </div>
+    </div>
+
+    <div id="categories-list" class="space-y-3"></div>
+
+    <p id="empty-state" class="hidden text-center text-slate-400 py-16">
+      Критических проблем не найдено — отличный результат.
+    </p>
+  </section>
+
+  <script>
+    // ------------------------------------------------------------------
+    // Состояние приложения
+    // ------------------------------------------------------------------
+    let lastReport = null;
+    // Если фронтенд открыт не с того же порта, где крутится FastAPI
+    // (например, через Live Server на :5500), используем полный адрес бэкенда.
+    // Когда страница отдаётся самим FastAPI (http://localhost:8000), сработает и так, и так.
+    const BACKEND_ORIGIN = "http://localhost:8000";
+    const API_URL = window.location.port === "8000"
+      ? "/api/audit"
+      : `${BACKEND_ORIGIN}/api/audit`;
+
+    const formScreen = document.getElementById("form-screen");
+    const loaderScreen = document.getElementById("loader-screen");
+    const dashboardScreen = document.getElementById("dashboard-screen");
+    const rescanWrap = document.getElementById("rescan-wrap");
+    const loaderText = document.getElementById("loader-text");
+    const formError = document.getElementById("form-error");
+
+    const loaderMessages = [
+      "Сканируем страницы…",
+      "Анализируем мета-теги…",
+      "Проверяем заголовки H1–H6…",
+      "Ищем битые ссылки…",
+      "Считаем изображения без alt…",
+      "Формируем отчёт…",
+    ];
+
+    function showScreen(name) {
+      formScreen.classList.toggle("hidden", name !== "form");
+      loaderScreen.classList.toggle("hidden", name !== "loader");
+      dashboardScreen.classList.toggle("hidden", name !== "dashboard");
+      rescanWrap.classList.toggle("hidden", name !== "dashboard");
+    }
+
+    function cycleLoaderMessages() {
+      let i = 0;
+      loaderText.textContent = loaderMessages[0];
+      return setInterval(() => {
+        i = (i + 1) % loaderMessages.length;
+        loaderText.textContent = loaderMessages[i];
+      }, 1400);
+    }
+
+    // ------------------------------------------------------------------
+    // Отправка формы аудита
+    // ------------------------------------------------------------------
+    document.getElementById("audit-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      formError.classList.add("hidden");
+
+      const url = document.getElementById("url-input").value.trim();
+      const maxDepth = parseInt(document.getElementById("max-depth").value, 10) || 3;
+      const maxPages = parseInt(document.getElementById("max-pages").value, 10) || 50;
+
+      showScreen("loader");
+      const interval = cycleLoaderMessages();
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, max_depth: maxDepth, max_pages: maxPages }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Ошибка сервера (${res.status})`);
+        }
+
+        const data = await res.json();
+        lastReport = data;
+        renderDashboard(data);
+        showScreen("dashboard");
+      } catch (err) {
+        showScreen("form");
+        formError.textContent = err.message || "Не удалось выполнить аудит. Проверьте URL и повторите попытку.";
+        formError.classList.remove("hidden");
+      } finally {
+        clearInterval(interval);
+      }
+    });
+
+    document.getElementById("rescan-btn").addEventListener("click", () => {
+      showScreen("form");
+    });
+
+    // ------------------------------------------------------------------
+    // Рендер дашборда результатов
+    // ------------------------------------------------------------------
+    function scoreColor(score) {
+      if (score >= 80) return "text-cyan";
+      if (score >= 50) return "text-amber";
+      return "text-coral";
+    }
+
+    function renderDashboard(data) {
+      const scoreEl = document.getElementById("score-value");
+      scoreEl.textContent = `${data.seo_score}/100`;
+      scoreEl.className = `text-3xl font-extrabold ${scoreColor(data.seo_score)}`;
+      document.getElementById("score-target").textContent = data.start_url;
+
+      document.getElementById("pages-value").textContent = data.pages_scanned;
+      document.getElementById("errors-value").textContent = data.errors_count;
+      document.getElementById("broken-value").textContent = data.broken_links_count;
+
+      const list = document.getElementById("categories-list");
+      list.innerHTML = "";
+
+      if (!data.categories.length) {
+        document.getElementById("empty-state").classList.remove("hidden");
+        return;
+      }
+      document.getElementById("empty-state").classList.add("hidden");
+
+      data.categories.forEach((cat) => {
+        const details = document.createElement("details");
+        details.className = "bg-white border border-slate-200 rounded-xl overflow-hidden fade-in";
+
+        const isError = cat.items.some(() => true) && (cat.code === "no_title" || cat.code === "duplicate_title" || cat.code === "no_h1" || cat.code === "broken_link" || cat.code === "no_meta_description" || cat.code === "timeout" || cat.code === "connection_error");
+        const badgeColor = isError ? "bg-coral/10 text-coral" : "bg-amber/10 text-amber";
+
+        details.innerHTML = `
+          <summary class="flex items-center justify-between px-5 py-4">
+            <div class="flex items-center gap-3">
+              <svg class="chevron w-4 h-4 text-slate-400 transition-transform" viewBox="0 0 24 24" fill="none">
+                <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span class="font-medium">${cat.label}</span>
+            </div>
+            <span class="text-xs font-mono px-2 py-1 rounded-md ${badgeColor}">${cat.count}</span>
+          </summary>
+          <div class="border-t border-slate-100 divide-y divide-slate-50">
+            ${cat.items.map(item => `
+              <div class="px-5 py-3 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
+                <a href="${item.url}" target="_blank" rel="noopener" class="text-sm font-mono text-cyan break-all hover:underline">${item.url}</a>
+                <span class="text-xs text-slate-400">${item.message}</span>
+              </div>
+            `).join("")}
+          </div>
+        `;
+        list.appendChild(details);
+      });
+    }
+
+    // ------------------------------------------------------------------
+    // Экспорт отчёта
+    // ------------------------------------------------------------------
+    function downloadBlob(content, filename, type) {
+      const blob = new Blob([content], { type });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    document.getElementById("export-json").addEventListener("click", () => {
+      if (!lastReport) return;
+      downloadBlob(JSON.stringify(lastReport, null, 2), "seo-audit-report.json", "application/json");
+    });
+
+    document.getElementById("export-csv").addEventListener("click", () => {
+      if (!lastReport) return;
+      const rows = [["category", "url", "message"]];
+      lastReport.categories.forEach((cat) => {
+        cat.items.forEach((item) => {
+          rows.push([cat.label, item.url, item.message]);
+        });
+      });
+      const csv = rows
+        .map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+      downloadBlob(csv, "seo-audit-report.csv", "text/csv");
+    });
+  </script>
+</body>
+</html>
